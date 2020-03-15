@@ -1,0 +1,68 @@
+from keras.datasets import mnist
+from keras.utils import np_utils
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.layers import Dropout
+import matplotlib.pyplot as plt
+
+(x_train, y_train), (x_test, y_test) = mnist.load_data()
+
+x_train = x_train.reshape(60000, 784).astype('float32')
+x_test = x_test.reshape(10000, 784).astype('float32')
+
+x_train = x_train / 255
+x_test = x_test / 255
+
+y_train_onehot = np_utils.to_categorical(y_train)
+y_test_onehot = np_utils.to_categorical(y_test)
+
+model = Sequential()
+
+model.add(Dense(
+    units=1024,
+    input_dim=784,
+    kernel_initializer='normal',
+    activation='relu'
+))
+
+model.add(Dropout(0.5))
+
+model.add(Dense(
+    units=10,
+    kernel_initializer='normal',
+    activation='softmax'
+))
+
+model.summary()
+
+model.compile(
+    loss='categorical_crossentropy',
+    optimizer='adam',
+    metrics=['accuracy']
+)
+
+train_history = model.fit(
+    x=x_train,
+    y=y_train_onehot,
+    validation_split=0.2,
+    epochs=15,
+    batch_size=200,
+    verbose=2
+)
+
+test_loss, test_acc = model.evaluate(x_test, y_test_onehot)
+print('test_loss:', test_loss)
+print('test_acc:', test_acc)
+
+
+def show_train_history(train_history, train, validation):
+    plt.plot(train_history.history[train])
+    plt.plot(train_history.history[validation])
+    plt.title('Train History')
+    plt.ylabel(train)
+    plt.xlabel('Epoch')
+    plt.legend(['train', 'validation'], loc='upper left')
+    plt.show()
+
+
+show_train_history(train_history, 'accuracy', 'val_accuracy')
