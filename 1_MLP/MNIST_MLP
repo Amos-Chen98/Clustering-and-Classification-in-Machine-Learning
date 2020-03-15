@@ -3,9 +3,20 @@ from keras.utils import np_utils
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import Dropout
+import numpy as np
 import matplotlib.pyplot as plt
+import cv2
 
 (x_train, y_train), (x_test, y_test) = mnist.load_data()
+
+img = np.zeros((280, 280))
+for i in range(100):
+    row = i // 10
+    col = i % 10
+    img[28 * row:28 * (row + 1), 28 * col:28 * (col + 1)] = x_train[i]
+
+cv2.imshow("demo", img)  # show the first 100 img in the dataset
+cv2.waitKey(3000)
 
 x_train = x_train.reshape(60000, 784).astype('float32')
 x_test = x_test.reshape(10000, 784).astype('float32')
