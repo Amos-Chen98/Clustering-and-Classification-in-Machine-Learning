@@ -1,0 +1,170 @@
+import tensorflow as tf
+import os
+import random
+
+# gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
+# tf.config.experimental.set_virtual_device_configuration(
+#     gpus[0],
+#     [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=1200)])
+
+gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
+for gpu in gpus:
+    tf.config.experimental.set_memory_growth(device=gpu, enable=True)
+
+# ------------------------------------------------构建数据集------------------------------------------------
+train_tfrecord = 'MNIST/train.tfrecords'
+test_tfrecord = 'MNIST/test.tfrecords'
+train_scale = 0.8  # 训练集占比
+
+data_num_dir = [0] * 10
+for tag in range(10):
+    data_num_dir[tag] = 'MNIST/' + str(tag) + '/'
+
+data_filenames_batch = []
+for i in range(10):
+    data_filenames_batch.append([data_num_dir[i] + filename for filename in os.listdir(data_num_dir[i])])
+
+print('类别数：', len(data_filenames_batch))
+
+data_filenames = [y for x in data_filenames_batch for y in x]
+total_size = len(data_filenames)
+print('数据集大小：', total_size)
+
+data_labels = []
+for i in range(10):
+    data_labels += [i] * len(data_filenames_batch[i])
+
+tmp_uni = list(zip(data_filenames, data_labels))
+
+random.shuffle(tmp_uni)
+
+train_index = int(total_size * train_scale)
+print('训练集大小：', train_index)
+print('测试集大小：', total_size - train_index)
+
+train_list = tmp_uni[0:train_index]
+test_list = tmp_uni[train_index:]
+
+train_filenames, train_labels = zip(*train_list)
+test_filenames, test_labels = zip(*test_list)
+
+# ------------------------------------------------建立训练集------------------------------------------------
+with tf.io.TFRecordWriter(train_tfrecord)as writer:
+    for filename, label in zip(train_filenames, train_labels):
+        image = open(filename, 'rb').read()  # 读取数据集图片到内存，image 为一个 Byte 类型的字符串
+        feature = {  # 建立 tf.train.Feature 字典
+            'image': tf.train.Feature(bytes_list=tf.train.BytesList(value=[image])),  # 图片是一个 Bytes 对象
+            'label': tf.train.Feature(int64_list=tf.train.Int64List(value=[label]))  # 标签是一个 Int 对象
+        }
+        example = tf.train.Example(features=tf.train.Features(feature=feature))  # 通过字典建立 Example
+        writer.write(example.SerializeToString())  # 将Example序列化并写入 TFRecord 文件
+
+raw_train_dataset = tf.data.TFRecordDataset(train_tfrecord)  # 读取 TFRecord 文件
+
+feature_description = {  # 定义Feature结构，告诉解码器每个Feature的类型是什么
+    'image': tf.io.FixedLenFeature([], tf.string),
+    'label': tf.io.FixedLenFeature([], tf.int64),
+}
+
+
+def _parse_example(example_string):  # 将 TFRecord 文件中的每一个序列化的 tf.train.Example 解码
+    feature_dict = tf.io.parse_single_example(example_string, feature_description)
+    feature_dict['image'] = tf.io.decode_bmp(feature_dict['image'])
+    feature_dict['image'] = tf.image.resize(feature_dict['image'], [128, 128]) / 255.0
+    return feature_dict['image'], feature_dict['label']
+
+
+train_dataset = raw_train_dataset.map(_parse_example)
+
+# ------------------------------------------------建立测试集------------------------------------------------
+with tf.io.TFRecordWriter(test_tfrecord)as writer:
+    for filename, label in zip(test_filenames, test_labels):
+        image = open(filename, 'rb').read()  # 读取数据集图片到内存，image 为一个 Byte 类型的字符串
+        feature = {  # 建立 tf.train.Feature 字典
+            'image': tf.train.Feature(bytes_list=tf.train.BytesList(value=[image])),  # 图片是一个 Bytes 对象
+            'label': tf.train.Feature(int64_list=tf.train.Int64List(value=[label]))  # 标签是一个 Int 对象
+        }
+        example = tf.train.Example(features=tf.train.Features(feature=feature))  # 通过字典建立 Example
+        writer.write(example.SerializeToString())  # 将Example序列化并写入 TFRecord 文件
+
+raw_test_dataset = tf.data.TFRecordDataset(test_tfrecord)  # 读取 TFRecord 文件
+
+test_dataset = raw_test_dataset.map(_parse_example)
+
+print('训练集属性', type(train_dataset))
+print('测试集属性', type(test_dataset))
+
+# for image, label in train_dataset:
+#     print(image)
+#     plt.title('0' if label == 0 else 'others')
+#     plt.imshow(image.numpy()[:, :, 0])  # [:, :, 0]
+#     plt.show()
+
+buffer_size = 300
+batch_size = 16
+
+train_dataset = train_dataset.shuffle(buffer_size)
+train_dataset = train_dataset.batch(batch_size)
+train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
+
+test_dataset = test_dataset.batch(batch_size)
+test_dataset = test_dataset.prefetch(tf.data.experimental.AUTOTUNE)
+
+
+# ------------------------------------------------构建模型------------------------------------------------
+class CNN(tf.keras.Model):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = tf.keras.layers.Conv2D(
+            filters=32,
+            kernel_size=[3, 3],
+            padding='same',
+            activation=tf.nn.relu,
+            input_shape=(128, 128, 4)
+        )
+        self.pool1 = tf.keras.layers.MaxPool2D(pool_size=[2, 2], strides=2)
+        self.conv2 = tf.keras.layers.Conv2D(
+            filters=64,
+            kernel_size=[5, 5],
+            padding='same',
+            activation=tf.nn.relu
+        )
+        self.pool2 = tf.keras.layers.MaxPool2D(pool_size=[2, 2], strides=2)
+        self.flatten = tf.keras.layers.Reshape(target_shape=(32 * 32 * 64,))
+        self.dense1 = tf.keras.layers.Dense(units=512, activation=tf.nn.relu)
+        self.drop1 = tf.keras.layers.Dropout(0.2)
+        self.dense2 = tf.keras.layers.Dense(units=10, activation='softmax')
+
+    def call(self, inputs):
+        x = self.conv1(inputs)
+        x = self.pool1(x)
+        x = self.conv2(x)
+        x = self.pool2(x)
+        x = self.flatten(x)
+        x = self.dense1(x)
+        x = self.drop1(x)
+        output = self.dense2(x)
+        return output
+
+
+model = CNN()
+
+model.compile(
+    optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+    loss=tf.keras.losses.sparse_categorical_crossentropy,
+    metrics=[tf.keras.metrics.sparse_categorical_accuracy]
+)
+
+# checkpoint = tf.train.Checkpoint(MNISTmodel=model)
+
+# ------------------------------------------------训练与测试------------------------------------------------
+
+model.fit(train_dataset, epochs=10)  # 训练模型
+
+model.summary()  # 输出模型信息
+
+print("-----------------↓↓↓测试集测试↓↓↓-----------------")
+
+model.evaluate(test_dataset)  # 使用测试集验证
+
+# checkpoint.save('./myMNISTmodel/model.ckpt')
