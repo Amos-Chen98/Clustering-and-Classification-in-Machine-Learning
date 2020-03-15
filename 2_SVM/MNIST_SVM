@@ -1,0 +1,44 @@
+from keras.datasets import mnist
+import numpy as np
+import cv2
+from sklearn.model_selection import cross_val_score
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.svm import SVC
+
+# the num of data used for training. If added, it will take longer to train and accuracy will increase.
+train_size = 4000
+test_size = 800
+
+(x_train, y_train), (x_test, y_test) = mnist.load_data()
+
+img = np.zeros((280, 280))
+for i in range(100):
+    row = i // 10
+    col = i % 10
+    img[28 * row:28 * (row + 1), 28 * col:28 * (col + 1)] = x_train[i]
+
+cv2.imshow("demo", img)  # show the first 100 img in the dataset
+cv2.waitKey(3000)
+
+x_train = x_train.reshape(60000, 784).astype('float32')
+x_test = x_test.reshape(10000, 784).astype('float32')
+
+x_train = x_train[0:train_size, :]
+y_train = y_train[0:train_size]
+x_test = x_test[0:test_size, :]
+y_test = y_test[0:test_size]
+
+scaling = MinMaxScaler(feature_range=(-1, 1)).fit(x_train)
+x_train = scaling.transform(x_train)
+x_test = scaling.transform(x_test)
+
+clf = SVC(kernel='rbf', class_weight='balanced', verbose=1)
+
+cv_performance = cross_val_score(clf, x_train, y_train, cv=5)
+
+model = clf.fit(x_train, y_train)
+
+test_performance = model.score(x_test, y_test)
+
+print('Cross-validation accuracy: %0.4f' % np.mean(cv_performance))
+print('test accuracy:', test_performance)
