@@ -2,7 +2,7 @@
 Machine Learning drizzle! Different algorithms for classification, using MNIST database of handwritten digits for example.
 ## Project1 MLP
 * Requirements
-numpy==1.18.1
+numpy==1.18.1<br>
 opencv_python==4.2.0.32
 matplotlib==2.2.3
 Keras==2.3.1
