@@ -1,5 +1,7 @@
 # MNIST-with-Multiple-Algorithms
 Machine Learning drizzle! Different algorithms for classification, using MNIST database of handwritten digits for example.
+## Environment
+* Python3.7<br>
 ## Project1 MLP
 * Requirements<br>
 numpy==1.18.1<br>
