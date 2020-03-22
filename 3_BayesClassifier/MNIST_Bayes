@@ -1,0 +1,77 @@
+from keras.datasets import mnist
+import numpy as np
+import cv2
+from sklearn import naive_bayes
+from sklearn.model_selection import cross_val_score
+
+
+def load_data():
+    (x_train, y_train), (x_test, y_test) = mnist.load_data()
+
+    img = np.zeros((280, 280))
+    for i in range(100):
+        row = i // 10
+        col = i % 10
+        img[28 * row:28 * (row + 1), 28 * col:28 * (col + 1)] = x_train[i]
+
+    cv2.imshow("demo", img)  # show the first 100 img in the dataset
+    cv2.waitKey(3000)
+
+    x_train = x_train.reshape(60000, 784).astype('float32')
+    x_test = x_test.reshape(10000, 784).astype('float32')
+
+    x_train = x_train / 255
+    x_test = x_test / 255
+
+    return x_train, y_train, x_test, y_test
+
+
+def train_GaussianNB():
+    print("-----Using GaussianNB-----")
+
+    clf = naive_bayes.GaussianNB()
+    clf.fit(x_train, y_train)
+
+    cv_performance = cross_val_score(clf, x_train, y_train, cv=5)
+
+    test_performance = clf.score(x_test, y_test)
+
+    print('Cross-validation accuracy: %0.4f' % np.mean(cv_performance))
+    print('test accuracy:', test_performance)
+
+
+def train_MultinomialNB():
+    print("-----Using MultinomialNB-----")
+
+    clf = naive_bayes.MultinomialNB()
+    clf.fit(x_train, y_train)
+
+    cv_performance = cross_val_score(clf, x_train, y_train, cv=5)
+
+    test_performance = clf.score(x_test, y_test)
+
+    print('Cross-validation accuracy: %0.4f' % np.mean(cv_performance))
+    print('test accuracy:', test_performance)
+
+
+def train_BernoulliNB():
+    print("-----Using BernoulliNB-----")
+
+    clf = naive_bayes.BernoulliNB()
+    clf.fit(x_train, y_train)
+
+    cv_performance = cross_val_score(clf, x_train, y_train, cv=5)
+
+    test_performance = clf.score(x_test, y_test)
+
+    print('Cross-validation accuracy: %0.4f' % np.mean(cv_performance))
+    print('test accuracy:', test_performance)
+
+
+if __name__ == "__main__":
+    x_train, y_train, x_test, y_test = load_data()
+
+    # 使用三种Bayes分类器分别进行训练
+    train_GaussianNB()
+    train_MultinomialNB()
+    train_BernoulliNB()
