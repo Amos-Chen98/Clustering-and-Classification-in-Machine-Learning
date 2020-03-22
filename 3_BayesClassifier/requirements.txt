@@ -1,0 +1,4 @@
+opencv_python==4.2.0.32
+numpy==1.18.1
+Keras==2.3.1
+scikit_learn==0.22.2.post1
