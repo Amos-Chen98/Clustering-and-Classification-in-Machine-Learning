@@ -1,0 +1,102 @@
+from keras.datasets import mnist
+import numpy as np
+import cv2
+from sklearn import neighbors
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
+import time
+
+
+def load_data():
+    (x_train, y_train), (x_test, y_test) = mnist.load_data()
+    # Change these two numbers and you may see different results
+    train_data__num = 60000
+    test_data_num = 10000
+
+    x_train = x_train[0:train_data__num]
+    y_train = y_train[0:train_data__num]
+    x_test = x_test[0:test_data_num]
+    y_test = y_test[0:test_data_num]
+
+    img = np.zeros((280, 280))
+    for i in range(100):
+        row = i // 10
+        col = i % 10
+        img[28 * row:28 * (row + 1), 28 * col:28 * (col + 1)] = x_train[i]
+
+    cv2.imshow("demo", img)  # show the first 100 img in the dataset
+    cv2.waitKey(3000)
+
+    x_train = x_train.reshape(x_train.shape[0], x_train.shape[1] * x_train.shape[2]).astype('float32')
+    x_test = x_test.reshape(x_test.shape[0], x_test.shape[1] * x_test.shape[2]).astype('float32')
+
+    x_train = x_train / 255
+    x_test = x_test / 255
+
+    return x_train, y_train, x_test, y_test, train_data__num, test_data_num
+
+
+def data_PCA(x_train,x_test,train_data__num, test_data_num, n_components):
+    data = np.vstack((x_train, x_test))
+
+    pca = PCA(n_components)
+
+    data = pca.fit_transform(data)
+
+    x_train = data[0:train_data__num, :]
+    x_test = data[train_data__num:train_data__num + test_data_num, :]
+
+    # print(x_train.shape)
+    # print(y_train.shape)
+    # print(x_test.shape)
+    # print(y_test.shape)
+
+    return x_train, y_train, x_test, y_test
+
+
+def train(n_neighbors):
+    clf = neighbors.KNeighborsClassifier(n_neighbors)
+    # print(clf.fit(x_train, y_train))
+    clf.fit(x_train, y_train)
+    y_predict = clf.predict(x_test)
+    accuracy = (y_predict == y_test).astype(int).mean()
+    return accuracy
+
+
+def plot_accuracy(k_min, k_max):
+    time_start = time.time()
+    accuracy_series = []
+    k_series = []
+    for k in range(k_min, k_max + 1):
+        print('k =', k)
+        k_series.append(k)
+
+        accuracy = train(k)
+        print('accuracy:', accuracy)
+        accuracy_series.append(accuracy)
+
+        plt.clf()
+        plt.plot(k_series, accuracy_series, marker='.')
+        plt.title('Accuracy-n_neighbors')
+        plt.xlabel('n_neighbors')
+        plt.ylabel('Accuracy')
+
+        plt.draw()
+        plt.pause(0.0001)
+
+    accuracy_series = np.array(accuracy_series)
+    index = np.argsort(-accuracy_series)
+    time_end = time.time()
+    print('------------------------------------------')
+    print('Tried k from', k_min, 'to', k_max)
+    print('Total time:', time_end - time_start)
+    print('The best k is', k_series[index[0]])
+    print('Best accuracy:', accuracy_series[index[0]])
+    print('-------------Program finished-------------')
+    plt.show()
+
+
+if __name__ == "__main__":
+    x_train, y_train, x_test, y_test, train_data__num, test_data_num = load_data()
+    x_train, y_train, x_test, y_test = data_PCA(x_train,x_test,train_data__num, test_data_num, n_components=35)
+    plot_accuracy(k_min=1, k_max=8)
