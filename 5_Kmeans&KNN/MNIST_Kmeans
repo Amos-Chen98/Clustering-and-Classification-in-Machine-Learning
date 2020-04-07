@@ -1,0 +1,125 @@
+from keras.datasets import mnist
+import numpy as np
+import cv2
+from sklearn import neighbors
+from sklearn.decomposition import PCA
+import time
+from sklearn.cluster import KMeans
+
+
+def load_data():
+    (x_train, y_train), (x_test, y_test) = mnist.load_data()
+    # Change these two numbers and you may see different results
+    train_data__num = 60000
+    test_data_num = 10000
+
+    x_train = x_train[0:train_data__num]
+    y_train = y_train[0:train_data__num]
+    x_test = x_test[0:test_data_num]
+    y_test = y_test[0:test_data_num]
+
+    img = np.zeros((280, 280))
+    for i in range(100):
+        row = i // 10
+        col = i % 10
+        img[28 * row:28 * (row + 1), 28 * col:28 * (col + 1)] = x_train[i]
+
+    cv2.imshow("demo", img)  # show the first 100 img in the dataset
+    cv2.waitKey(3000)
+
+    x_train = x_train.reshape(x_train.shape[0], x_train.shape[1] * x_train.shape[2]).astype('float32')
+    x_test = x_test.reshape(x_test.shape[0], x_test.shape[1] * x_test.shape[2]).astype('float32')
+
+    x_train = x_train / 255
+    x_test = x_test / 255
+
+    return x_train, y_train, x_test, y_test, train_data__num, test_data_num
+
+
+def data_PCA(x_train, x_test, train_data__num, test_data_num, n_components):
+    data = np.vstack((x_train, x_test))
+
+    pca = PCA(n_components)
+
+    data = pca.fit_transform(data)
+
+    x_train = data[0:train_data__num, :]
+    x_test = data[train_data__num:train_data__num + test_data_num, :]
+
+    # print(x_train.shape)
+    # print(y_train.shape)
+    # print(x_test.shape)
+    # print(y_test.shape)
+
+    return x_train, y_train, x_test, y_test
+
+
+def Kmeans(x_train, y_train, train_data__num):
+    time_start = time.time()
+    print('---------------Clustering---------------')
+
+    n_clusters = 400
+    kmeans_clf = KMeans(n_clusters, max_iter=300)
+    s = kmeans_clf.fit(x_train)
+    print('KMeans属性：')
+    print(s)
+    y_label = kmeans_clf.labels_  # Shape:(train_data__num,)
+    # print(y_label)
+
+    n_centers = kmeans_clf.cluster_centers_
+
+    time_end = time.time()
+    print('Clustering time:', time_end - time_start, '\n')
+
+    y_predict = np.ndarray(train_data__num, )
+    n_centers_labels = np.ndarray(n_clusters, )
+
+    print('---------------Validation---------------')
+    time_start = time.time()
+
+    for k in range(n_clusters):
+        # Find the corresponding label of y_label in y_train
+        # Use the most frequent label as the label of y_predict[index] and n_centers_labels[k]
+        index = [i for i, x in enumerate(y_label) if x == k]
+
+        labels = y_train[index]
+
+        label_most = np.argmax(np.bincount(labels))
+        # print(label_most)
+
+        y_predict[index] = label_most
+        n_centers_labels[k] = label_most
+
+    y_predict = y_predict.astype(int)
+    n_centers_labels[k].astype(int)
+
+    # Validate the accuracy
+    time_end = time.time()
+    print('Validation time:', time_end - time_start)
+
+    valid_accuracy = (y_predict == y_train).astype(int).mean()
+    print('valid_accuracy:', valid_accuracy, '\n')
+
+    return n_centers, n_centers_labels
+
+
+def test_with_KNN(n_centers, n_centers_labels, x_test, y_test):
+    time_start = time.time()
+    print('---------------Testing---------------')
+
+    neighbors_clf = neighbors.KNeighborsClassifier(n_neighbors=1)
+    neighbors_clf.fit(n_centers, n_centers_labels)
+    y_test_predict = neighbors_clf.predict(x_test)
+
+    time_end = time.time()
+    print('Test time:', time_end - time_start)
+
+    test_accuracy = (y_test_predict == y_test).astype(int).mean()
+    print('test_accuracy:', test_accuracy, '\n')
+
+
+if __name__ == "__main__":
+    x_train, y_train, x_test, y_test, train_data__num, test_data_num = load_data()
+    x_train, y_train, x_test, y_test = data_PCA(x_train, x_test, train_data__num, test_data_num, n_components=35)
+    n_centers, n_centers_labels = Kmeans(x_train, y_train, train_data__num)
+    test_with_KNN(n_centers, n_centers_labels, x_test, y_test)
