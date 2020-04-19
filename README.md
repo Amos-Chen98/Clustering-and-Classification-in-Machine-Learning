@@ -27,3 +27,10 @@ numpy==1.18.1<br>
 opencv_python==4.2.0.32<br>
 matplotlib==2.2.3<br>
 scikit_learn==0.22.2.post1<br>
+## Project5 Kmeans&KNN
+* Requirements<br>
+Keras==2.3.1<br>
+numpy==1.18.1<br>
+opencv_python==4.2.0.32<br>
+matplotlib==2.2.3<br>
+scikit_learn==0.22.2.post1<br>
