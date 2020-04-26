@@ -1,0 +1,145 @@
+import numpy as np
+import os
+import cv2
+import time
+from sklearn.decomposition import PCA
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+from sklearn.externals import joblib
+
+forest_model_path = './saved_model/forest_model'
+
+
+def read_directory():
+    # ----------------Load train data----------------
+    train_img = []
+    train_name_array = []
+    train_label = []
+    for filename in os.listdir('./cells/train'):
+        # img = cv2.imread('./cells/train' + '/' + filename)
+        img = cv2.imread('./cells/train' + '/' + filename, cv2.IMREAD_GRAYSCALE)
+        train_img.append(img)
+        train_name_array.append(filename)
+
+    for i in range(len(train_name_array)):
+        isLymphocyte = 'TIL' in train_name_array[i]
+        isNormal = 'normal' in train_name_array[i]
+
+        if isLymphocyte:
+            train_label.append(0)
+        elif isNormal:
+            train_label.append(1)
+        else:
+            train_label.append(2)
+
+    # ----------------Load test data----------------
+    test_img = []
+    test_name_array = []
+    test_label = []
+    for filename in os.listdir('./cells/test'):
+        # img = cv2.imread('./cells/test' + '/' + filename)
+        img = cv2.imread('./cells/test' + '/' + filename, cv2.IMREAD_GRAYSCALE)
+        test_img.append(img)
+        test_name_array.append(filename)
+
+    for i in range(len(test_name_array)):
+        isLymphocyte = 'TIL' in test_name_array[i]
+        isNormal = 'normal' in test_name_array[i]
+
+        if isLymphocyte:
+            test_label.append(0)
+        elif isNormal:
+            test_label.append(1)
+        else:
+            test_label.append(2)
+
+    print('Data loaded')
+
+    print('In train dataset:\nLymphocyte:%d, Normal Epithelial:%d, Malignant Epithelial:%d' %
+          (train_label.count(0), train_label.count(1), train_label.count(2)))
+
+    print('In test dataset:\nLymphocyte:%d, Normal Epithelial:%d, Malignant Epithelial:%d' %
+          (test_label.count(0), test_label.count(1), test_label.count(2)))
+
+    return train_img, train_label, test_img, test_label
+
+
+def data_process(train_img, train_label, test_img, test_label):
+    train_img = np.array(train_img)
+    test_img = np.array(test_img)
+    y_train = np.array(train_label)
+    y_test = np.array(test_label)
+
+    # x_train = train_img.reshape(train_img.shape[0], train_img.shape[1] * train_img.shape[2] * train_img.shape[3])
+    x_train = train_img.reshape(train_img.shape[0], train_img.shape[1] * train_img.shape[2])
+    # x_test = test_img.reshape(test_img.shape[0], test_img.shape[1] * test_img.shape[2] * test_img.shape[3])
+    x_test = test_img.reshape(test_img.shape[0], test_img.shape[1] * test_img.shape[2])
+    x_train = x_train / 255.0
+    x_test = x_test / 255.0
+
+    train_num = train_img.shape[0]
+    test_num = test_img.shape[0]
+
+    print('Train dataset size：', x_train.shape)
+    print('Test dataset size：', x_test.shape)
+
+    data = np.vstack((x_train, x_test))
+
+    pca = PCA(n_components=20)
+
+    data = pca.fit_transform(data)
+
+    x_train = data[0:train_num, :]
+    x_test = data[train_num:train_num + test_num, :]
+
+    return x_train, y_train, x_test, y_test
+
+
+def model_train(x_train, y_train, model_save_path):
+    print('---------------Training: Using Random Forest---------------')
+    time_start = time.time()
+    forest_model = RandomForestClassifier(max_depth=20, n_estimators=300)
+    forest_model.fit(x_train, y_train)
+
+    time_end = time.time()
+    print('Clustering time:%.4f' % (time_end - time_start), '\n')
+
+    joblib.dump(forest_model, model_save_path)
+
+
+def model_predict(x_train, x_test, model_save_path):
+    print('---------------Model Loaded---------------')
+    forest_model = joblib.load(model_save_path)
+    y_train_label = forest_model.predict(x_train)
+    y_test_label = forest_model.predict(x_test)
+
+    y_train_predict = np.array(y_train_label)
+    y_test_predict = np.array(y_test_label)
+
+    return y_train_predict, y_test_predict
+
+
+def model_evaluate(model_load_path):
+    y_train_predict, y_test_predict = model_predict(x_train, x_test, model_load_path)
+
+    train_accuracy = purity(y_train, y_train_predict)
+    test_accuracy = purity(y_test, y_test_predict)
+    print('train accuracy:', train_accuracy)
+    print('test accuracy:', test_accuracy)
+
+
+def purity(y_true, y_predict):
+    purity_score = accuracy_score(y_true, y_predict)
+    # print('purity_score:', purity_score)
+    return purity_score
+
+
+if __name__ == "__main__":
+    train_img, train_label, test_img, test_label = read_directory()
+    x_train, y_train, x_test, y_test = data_process(train_img, train_label, test_img, test_label)
+
+    # model_train(x_train, y_train, model_save_path=forest_model_path)
+
+    model_evaluate(model_load_path=forest_model_path)
+
+    # os.system('spd-say "program finished"')
