@@ -1,0 +1,189 @@
+import numpy as np
+import os
+import cv2
+import time
+from sklearn.decomposition import PCA
+from sklearn import neighbors
+from sklearn.metrics import accuracy_score
+from skfuzzy.cluster import cmeans
+
+
+def read_directory():
+    # ----------------Load train data----------------
+    train_img = []
+    train_name_array = []
+    train_label = []
+    for filename in os.listdir('./cells/train'):
+        # img = cv2.imread('./cells/train' + '/' + filename)
+        img = cv2.imread('./cells/train' + '/' + filename, cv2.IMREAD_GRAYSCALE)
+        train_img.append(img)
+        train_name_array.append(filename)
+
+    for i in range(len(train_name_array)):
+        isLymphocyte = 'TIL' in train_name_array[i]
+        isNormal = 'normal' in train_name_array[i]
+
+        if isLymphocyte:
+            train_label.append(0)
+        elif isNormal:
+            train_label.append(1)
+        else:
+            train_label.append(2)
+
+    # ----------------Load test data----------------
+    test_img = []
+    test_name_array = []
+    test_label = []
+    for filename in os.listdir('./cells/test'):
+        # img = cv2.imread('./cells/test' + '/' + filename)
+        img = cv2.imread('./cells/test' + '/' + filename, cv2.IMREAD_GRAYSCALE)
+        test_img.append(img)
+        test_name_array.append(filename)
+
+    for i in range(len(test_name_array)):
+        isLymphocyte = 'TIL' in test_name_array[i]
+        isNormal = 'normal' in test_name_array[i]
+
+        if isLymphocyte:
+            test_label.append(0)
+        elif isNormal:
+            test_label.append(1)
+        else:
+            test_label.append(2)
+
+    print('Data loaded')
+
+    print('In train dataset:\nLymphocyte:%d, Normal Epithelial:%d, Malignant Epithelial:%d' %
+          (train_label.count(0), train_label.count(1), train_label.count(2)))
+
+    print('In test dataset:\nLymphocyte:%d, Normal Epithelial:%d, Malignant Epithelial:%d' %
+          (test_label.count(0), test_label.count(1), test_label.count(2)))
+
+    return train_img, train_label, test_img, test_label
+
+
+def data_process(train_img, train_label, test_img, test_label):
+    train_img = np.array(train_img)
+    test_img = np.array(test_img)
+    y_train = np.array(train_label)
+    y_test = np.array(test_label)
+
+    # x_train = train_img.reshape(train_img.shape[0], train_img.shape[1] * train_img.shape[2] * train_img.shape[3])
+    x_train = train_img.reshape(train_img.shape[0], train_img.shape[1] * train_img.shape[2])
+    # x_test = test_img.reshape(test_img.shape[0], test_img.shape[1] * test_img.shape[2] * test_img.shape[3])
+    x_test = test_img.reshape(test_img.shape[0], test_img.shape[1] * test_img.shape[2])
+    x_train = x_train / 255.0
+    x_test = x_test / 255.0
+
+    train_num = train_img.shape[0]
+    test_num = test_img.shape[0]
+
+    print('Train dataset size：', x_train.shape)
+    print('Test dataset size：', x_test.shape)
+
+    data = np.vstack((x_train, x_test))
+
+    pca = PCA(n_components=500)
+
+    data = pca.fit_transform(data)
+
+    x_train = data[0:train_num, :]
+    x_test = data[train_num:train_num + test_num, :]
+
+    return x_train, y_train, x_test, y_test
+
+
+def model_train(x_train):
+    x_train = x_train.T
+    print('---------------Clustering: Using cmeans---------------')
+    time_start = time.time()
+
+    cntr, u, uo, d, jm, p, fpc = cmeans(x_train, c=3, m=0.95, error=0.0001, maxiter=3000)
+
+    print('Final fuzzy partition coefficient:', fpc)
+    print('Number of iterations:', p)
+
+    time_end = time.time()
+    print('Clustering time:%.4f' % (time_end - time_start), '\n')
+
+    return cntr
+
+
+def test_with_KNN(cntr, x_test):
+    n_centers = cntr
+    n_centers_labels = np.array([[0], [1], [2]])
+    n_centers_labels=n_centers_labels.reshape(3,)
+    time_start = time.time()
+    print('---------------Testing---------------')
+
+    neighbors_clf = neighbors.KNeighborsClassifier(n_neighbors=1)
+    neighbors_clf.fit(n_centers, n_centers_labels)
+    y_test_predict = neighbors_clf.predict(x_test)
+
+    time_end = time.time()
+    print('Test time:', time_end - time_start)
+    print('y_test_predict:',y_test_predict)
+    print('y_test_predict:',type(y_test_predict))
+
+    return y_test_predict
+
+
+def y_predict_shift(y_predict, type):
+    index_0 = [i for i, x in enumerate(y_predict) if x == 0]
+    index_1 = [i for i, x in enumerate(y_predict) if x == 1]
+    index_2 = [i for i, x in enumerate(y_predict) if x == 2]
+
+    if type == 0:
+        y_predict[index_0] = 0
+        y_predict[index_1] = 1
+        y_predict[index_2] = 2
+    elif type == 1:
+        y_predict[index_1] = 2
+        y_predict[index_2] = 1
+    elif type == 2:
+        y_predict[index_0] = 1
+        y_predict[index_1] = 0
+        y_predict[index_2] = 2
+    elif type == 3:
+        y_predict[index_0] = 1
+        y_predict[index_1] = 2
+        y_predict[index_2] = 0
+    elif type == 4:
+        y_predict[index_0] = 2
+        y_predict[index_1] = 0
+        y_predict[index_2] = 1
+    elif type == 5:
+        y_predict[index_0] = 2
+        y_predict[index_1] = 1
+        y_predict[index_2] = 0
+
+    return y_predict
+
+
+def test_accuracy(y_train, y_predict):
+    y_predict_set = []
+    purity_score_set = []
+    for i in range(6):
+        y_predict_set.append(y_predict_shift(y_predict, i))
+        purity_score_set.append(purity(y_train, y_predict_set[i]))
+    purity_score = max(purity_score_set)
+    print('purity_score:', purity_score)
+
+
+def purity(y_true, y_predict):
+    purity_score = accuracy_score(y_true, y_predict)
+    return purity_score
+
+
+if __name__ == "__main__":
+    train_img, train_label, test_img, test_label = read_directory()
+
+    x_train, y_train, x_test, y_test = data_process(train_img, train_label, test_img, test_label)
+
+    cntr = model_train(x_train)
+
+    y_test_predict = test_with_KNN(cntr, x_test)
+
+    test_accuracy(y_test, y_test_predict)
+
+    # os.system('spd-say "program finished"')
